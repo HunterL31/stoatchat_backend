@@ -66,7 +66,7 @@ impl<'a> RatelimitResolver<Request<'a>> for DeltaRatelimits {
             "user_edit" => 2,
             "users" => 20,
             "bots" => 10,
-            "messaging" => 10,
+            "messaging" => 100,
             "channels" => 15,
             "servers" => 5,
             "auth" => 15,
