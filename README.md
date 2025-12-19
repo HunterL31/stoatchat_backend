@@ -173,6 +173,80 @@ Then go to http://local.revolt.chat:14701 to create an account/login.
 
 When signing up, go to http://localhost:14080 to find confirmation/password reset emails.
 
+## Docker Images
+
+### Pre-built Images
+
+This project automatically builds and publishes Docker images for each service via GitHub Actions. On every merge to `main`, the following images are published:
+
+| Service | Image | Description |
+|---------|-------|-------------|
+| API Server | `ghcr.io/hunterl31/api:latest` | Main REST API server |
+| Events | `ghcr.io/hunterl31/events:latest` | WebSocket events server |
+| File Server | `ghcr.io/hunterl31/files:latest` | File upload/download server |
+| Proxy | `ghcr.io/hunterl31/proxy:latest` | Metadata and image proxy |
+| GIF Service | `ghcr.io/hunterl31/gifbox:latest` | Tenor GIF proxy |
+| Scheduler | `ghcr.io/hunterl31/crond:latest` | Scheduled tasks daemon |
+| Push Daemon | `ghcr.io/hunterl31/pushd:latest` | Push notifications |
+
+### Using Pre-built Images
+
+Simply reference the images in your `docker-compose.yml`:
+
+```yaml
+services:
+  api:
+    image: ghcr.io/hunterl31/api:latest
+    volumes:
+      - ./Revolt.toml:/Revolt.toml:ro
+
+  events:
+    image: ghcr.io/hunterl31/events:latest
+    volumes:
+      - ./Revolt.toml:/Revolt.toml:ro
+
+  # ... other services
+```
+
+### Local Development Builds
+
+For local development and testing, you can build the services yourself:
+
+#### Option 1: Individual Services (Production-like)
+```bash
+# Build base image
+docker build -t local/base:latest .
+
+# Build individual services
+docker build -f crates/delta/Dockerfile -t local/api:latest \
+  --build-arg BASE_IMAGE=local/base:latest .
+
+docker build -f crates/bonfire/Dockerfile -t local/events:latest \
+  --build-arg BASE_IMAGE=local/base:latest .
+
+# ... etc for other services
+```
+
+#### Option 2: Quick Local Build
+If you create a local unified Dockerfile (e.g., `Dockerfile.local`), you can build everything at once:
+
+```bash
+docker build -f Dockerfile.local -t local/revolt:latest .
+
+# Run different services from the same image
+docker run local/revolt:latest revolt-delta    # API
+docker run local/revolt:latest revolt-bonfire  # Events
+```
+
+### Configuration
+
+All containers expect configuration at `/Revolt.toml`. Mount your config file:
+
+```yaml
+volumes:
+  - ./Revolt.toml:/Revolt.toml:ro
+```
+
 ## Deployment Guide
 
 ### Cutting new crate releases
