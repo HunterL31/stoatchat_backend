@@ -188,7 +188,7 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            ghcr.io/stoatchat/pushd
+            ghcr.io/${{ github.repository_owner }}/pushd
       - name: Publish
         uses: docker/build-push-action@v4
         with:
@@ -207,7 +207,7 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            ghcr.io/stoatchat/voice-ingress
+            ghcr.io/${{ github.repository_owner }}/voice-ingress
       - name: Publish
         uses: docker/build-push-action@v4
         with:
