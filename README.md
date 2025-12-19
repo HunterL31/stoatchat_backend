@@ -173,125 +173,79 @@ Then go to http://local.revolt.chat:14701 to create an account/login.
 
 When signing up, go to http://localhost:14080 to find confirmation/password reset emails.
 
-## Docker Build Guide
+## Docker Images
 
-### Building Custom Docker Images
+### Pre-built Images
 
-This project includes two Dockerfiles:
-- `Dockerfile` - Multi-architecture build with cross-compilation support
-- `Dockerfile.useCurrentArch` - Single architecture build for current system
+This project automatically builds and publishes Docker images for each service via GitHub Actions. On every merge to `main`, the following images are published:
 
-> [!IMPORTANT]
-> If you encounter "an error occurred" in the web UI after building a custom container, it's likely due to an incomplete Dockerfile that lacks a proper runtime stage.
+| Service | Image | Description |
+|---------|-------|-------------|
+| API Server | `ghcr.io/hunterl31/api:latest` | Main REST API server |
+| Events | `ghcr.io/hunterl31/events:latest` | WebSocket events server |
+| File Server | `ghcr.io/hunterl31/files:latest` | File upload/download server |
+| Proxy | `ghcr.io/hunterl31/proxy:latest` | Metadata and image proxy |
+| GIF Service | `ghcr.io/hunterl31/gifbox:latest` | Tenor GIF proxy |
+| Scheduler | `ghcr.io/hunterl31/crond:latest` | Scheduled tasks daemon |
+| Push Daemon | `ghcr.io/hunterl31/pushd:latest` | Push notifications |
 
-#### Common Issues and Solutions
+### Using Pre-built Images
 
-**Problem**: Container builds successfully but fails to run or shows "an error occurred"
-- **Cause**: The original `Dockerfile.useCurrentArch` only contained a build stage without a runtime stage
-- **Solution**: Ensure your Dockerfile has both build and runtime stages (see below)
+Simply reference the images in your `docker-compose.yml`:
 
-**Problem**: Binary files not found during Docker build
-- **Cause**: Binary names in Rust are based on `[package] name` in `Cargo.toml`, not directory names
-- **Solution**: Use correct binary names: `revolt-delta`, `revolt-bonfire`, `revolt-autumn`, etc.
-
-#### Building a Working Container
-
-1. **Use the complete Dockerfile structure**:
-   ```dockerfile
-   # Build Stage
-   FROM rust:1.86.0-slim-bookworm
-   USER 0:0
-   WORKDIR /home/rust/src
-   
-   # Install build dependencies
-   RUN apt-get update && \
-       apt-get install -y \
-       make \
-       pkg-config \
-       libssl-dev
-   
-   # Copy and build (see existing Dockerfile.useCurrentArch for full details)
-   
-   # Runtime Stage
-   FROM debian:bookworm-slim
-   USER 0:0
-   
-   # Install runtime dependencies
-   RUN apt-get update && \
-       apt-get install -y \
-       ca-certificates \
-       libssl3 && \
-       rm -rf /var/lib/apt/lists/*
-   
-   # Copy built binaries from build stage
-   COPY --from=0 /home/rust/src/target/release/revolt-delta /usr/local/bin/
-   COPY --from=0 /home/rust/src/target/release/revolt-bonfire /usr/local/bin/
-   COPY --from=0 /home/rust/src/target/release/revolt-autumn /usr/local/bin/
-   COPY --from=0 /home/rust/src/target/release/revolt-january /usr/local/bin/
-   COPY --from=0 /home/rust/src/target/release/revolt-gifbox /usr/local/bin/
-   COPY --from=0 /home/rust/src/target/release/revolt-crond /usr/local/bin/
-   COPY --from=0 /home/rust/src/target/release/revolt-pushd /usr/local/bin/
-   COPY --from=0 /home/rust/src/target/release/revolt-voice-ingress /usr/local/bin/
-   
-   # Set working directory
-   WORKDIR /
-   
-   # Default to running the delta (API) service
-   CMD ["revolt-delta"]
-   ```
-
-2. **Build the container**:
-   ```bash
-   # Build for current architecture
-   docker build -f Dockerfile.useCurrentArch -t your-registry/backend:latest .
-   
-   # Build for multiple architectures (requires buildx)
-   docker buildx build -f Dockerfile --platform linux/amd64,linux/arm64 -t your-registry/backend:latest .
-   ```
-
-3. **Push to registry** (if needed):
-   ```bash
-   docker push your-registry/backend:latest
-   ```
-
-#### Binary Names Reference
-
-The following binaries are built and should be copied to `/usr/local/bin/`:
-
-| Service | Binary Name | Description |
-|---------|-------------|-------------|
-| API Server | `revolt-delta` | Main REST API server |
-| Events | `revolt-bonfire` | WebSocket events server |
-| File Server | `revolt-autumn` | File upload/download server |
-| Proxy | `revolt-january` | Metadata and image proxy |
-| GIF Service | `revolt-gifbox` | Tenor GIF proxy |
-| Scheduler | `revolt-crond` | Scheduled tasks daemon |
-| Push Daemon | `revolt-pushd` | Push notifications |
-| Voice Ingress | `revolt-voice-ingress` | Voice chat ingress |
-
-#### Configuration in Containers
-
-The container will search for configuration files in this order:
-1. `./Revolt.toml` (current working directory)
-2. `./Revolt.overrides.toml` (current working directory)  
-3. `/Revolt.toml` (root directory - recommended for containers)
-
-Mount your configuration file to `/Revolt.toml` in the container:
 ```yaml
-# docker-compose.yml
 services:
   api:
-    image: your-registry/backend:latest
+    image: ghcr.io/hunterl31/api:latest
     volumes:
       - ./Revolt.toml:/Revolt.toml:ro
+
+  events:
+    image: ghcr.io/hunterl31/events:latest
+    volumes:
+      - ./Revolt.toml:/Revolt.toml:ro
+
+  # ... other services
 ```
 
-#### Troubleshooting
+### Local Development Builds
 
-- **Container exits immediately**: Check that runtime dependencies are installed and binaries are executable
-- **"Binary not found" errors**: Verify binary names match the package names in `Cargo.toml`
-- **SSL/TLS errors**: Ensure `ca-certificates` and `libssl3` are installed in runtime stage
-- **Configuration not loaded**: Mount config file to `/Revolt.toml` or set proper working directory
+For local development and testing, you can build the services yourself:
+
+#### Option 1: Individual Services (Production-like)
+```bash
+# Build base image
+docker build -t local/base:latest .
+
+# Build individual services
+docker build -f crates/delta/Dockerfile -t local/api:latest \
+  --build-arg BASE_IMAGE=local/base:latest .
+
+docker build -f crates/bonfire/Dockerfile -t local/events:latest \
+  --build-arg BASE_IMAGE=local/base:latest .
+
+# ... etc for other services
+```
+
+#### Option 2: Quick Local Build
+If you create a local unified Dockerfile (e.g., `Dockerfile.local`), you can build everything at once:
+
+```bash
+docker build -f Dockerfile.local -t local/revolt:latest .
+
+# Run different services from the same image
+docker run local/revolt:latest revolt-delta    # API
+docker run local/revolt:latest revolt-bonfire  # Events
+```
+
+### Configuration
+
+All containers expect configuration at `/Revolt.toml`. Mount your config file:
+
+```yaml
+volumes:
+  - ./Revolt.toml:/Revolt.toml:ro
+```
 
 ## Deployment Guide
 
