@@ -36,3 +36,30 @@ RUN sh /tmp/build-image-layer.sh deps
 # Build all apps
 COPY crates ./crates
 RUN sh /tmp/build-image-layer.sh apps
+
+# Runtime Stage
+FROM debian:bookworm-slim
+USER 0:0
+
+# Install runtime dependencies
+RUN apt-get update && \
+    apt-get install -y \
+    ca-certificates \
+    libssl3 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy built binaries from build stage
+COPY --from=0 /home/rust/src/target/release/revolt-delta /usr/local/bin/
+COPY --from=0 /home/rust/src/target/release/revolt-bonfire /usr/local/bin/
+COPY --from=0 /home/rust/src/target/release/revolt-autumn /usr/local/bin/
+COPY --from=0 /home/rust/src/target/release/revolt-january /usr/local/bin/
+COPY --from=0 /home/rust/src/target/release/revolt-gifbox /usr/local/bin/
+COPY --from=0 /home/rust/src/target/release/revolt-crond /usr/local/bin/
+COPY --from=0 /home/rust/src/target/release/revolt-pushd /usr/local/bin/
+COPY --from=0 /home/rust/src/target/release/revolt-voice-ingress /usr/local/bin/
+
+# Set working directory
+WORKDIR /
+
+# Default to running the delta (API) service
+CMD ["revolt-delta"]
